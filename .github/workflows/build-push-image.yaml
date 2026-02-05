@@ -1,0 +1,44 @@
+name: CI - Build Controller Image
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  IMAGE_NAME: json-server-controller
+  TTL: 2h
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute image tag
+        id: vars
+        run: |
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          echo "tag=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build and push to ttl.sh
+        run: |
+          IMAGE=ttl.sh/${IMAGE_NAME}-${{ steps.vars.outputs.tag }}:${TTL}
+          echo "Building and pushing $IMAGE"
+
+          docker build \
+            -t $IMAGE \
+            .
+
+          docker push $IMAGE
+
+      - name: Output image reference
+        run: |
+          echo "Image pushed to:"
+          echo "ttl.sh/${IMAGE_NAME}-${{ steps.vars.outputs.tag }}:${TTL}"

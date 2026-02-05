@@ -1,0 +1,14 @@
+apiVersion: example.example.com/v1
+kind: JsonServer
+metadata:
+  name: qapp-my-server
+spec:
+  replicas: 2
+  jsonConfig: |
+    {
+      "people": [
+        { "id": 1, "name": "Person A" },
+        { "id": 2, "name": "Person B" }
+      ]
+    }
+
