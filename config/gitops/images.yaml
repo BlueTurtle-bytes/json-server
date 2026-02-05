@@ -1,0 +1,21 @@
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: json-server-controller
+  namespace: flux-system
+spec:
+  image: ttl.sh/json-server-controller
+  interval: 1m
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: json-server-controller
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: json-server-controller
+  policy:
+    alphabetical:
+      order: asc
+
