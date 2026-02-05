@@ -8,4 +8,5 @@ spec:
   url: https://github.com/BlueTurtle-bytes/json-server.git
   ref:
     branch: main
-
+  secretRef:
+    name: json-server-git-auth
