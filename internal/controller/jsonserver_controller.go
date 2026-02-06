@@ -29,8 +29,8 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
-    "encoding/json"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -55,47 +55,46 @@ type JsonServerReconciler struct {
 }
 
 // RBAC
-//+kubebuilder:rbac:groups=example.com,resources=jsonservers,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=example.com,resources=jsonservers/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups="",resources=services;configmaps,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
-
+// +kubebuilder:rbac:groups=example.com,resources=jsonservers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=example.com,resources=jsonservers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services;configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 
 func (r *JsonServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	var js examplev1.JsonServer
 	if err := r.Get(ctx, req.NamespacedName, &js); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-    
-		// -------------------- JSON Validation --------------------
-	var parsed interface{}
-	if err := json.Unmarshal([]byte(js.Spec.JsonConfig), &parsed); err != nil {
-		log.Info("invalid jsonConfig detected", "name", js.Name, "error", err)
 
-		r.updateStatus(ctx,&js,"Error","Error: spec.jsonConfig is not a valid json object")
+	// -------------------- JSON Validation --------------------
+	var parsed any
+	if err := json.Unmarshal([]byte(js.Spec.JsonConfig), &parsed); err != nil {
+		logger.Info("invalid jsonConfig detected", "name", js.Name, "error", err)
+
+		r.updateStatus(ctx, &js, "Error", "Error: spec.jsonConfig is not a valid json object")
 
 		// Stop reconciliation – do NOT create/update resources
 		return ctrl.Result{}, nil
 	}
 
-
 	if err := r.reconcileConfigMap(ctx, &js); err != nil {
-		log.Error(err, "failed to reconcile ConfigMap")
+		logger.Error(err, "failed to reconcile ConfigMap")
 		r.updateStatus(ctx, &js, "Error", "Error: unexpected failure")
 		return ctrl.Result{}, err
 	}
 
 	// if err := r.reconcileDeployment(ctx, &js); err != nil {
-	// 	log.Error(err, "failed to reconcile Deployment")
+	// 	logger.Error(err, "failed to reconcile Deployment")
 	// 	r.updateStatus(ctx, &js, "Error", "Error: unexpected failure")
 	// 	return ctrl.Result{}, err
 	// }
 
-	deploy, err := r.reconcileDeployment(ctx, &js); if err != nil {
-		log.Error(err, "failed to reconcile Deployment")
+	deploy, err := r.reconcileDeployment(ctx, &js)
+	if err != nil {
+		logger.Error(err, "failed to reconcile Deployment")
 		r.updateStatus(ctx, &js, "Error", "Error: unexpected failure")
 		return ctrl.Result{}, err
 	}
@@ -103,9 +102,8 @@ func (r *JsonServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// ✅ Accurate replica reporting
 	js.Status.Replicas = deploy.Status.ReadyReplicas
 
-
 	if err := r.reconcileService(ctx, &js); err != nil {
-		log.Error(err, "failed to reconcile Service")
+		logger.Error(err, "failed to reconcile Service")
 		r.updateStatus(ctx, &js, "Error", "Error: unexpected failure")
 		return ctrl.Result{}, err
 	}
@@ -116,9 +114,8 @@ func (r *JsonServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// }
 	// // Sync replicas into status for scale subresource
 	// js.Status.Replicas = replicas
-	
 
-	r.updateStatus(ctx, &js, "Synced", "Synced succesfully!")
+	r.updateStatus(ctx, &js, "Synced", "Synced successfully!")
 	return ctrl.Result{}, nil
 }
 
@@ -142,7 +139,9 @@ func (r *JsonServerReconciler) reconcileConfigMap(ctx context.Context, js *examp
 	}
 
 	if apierrors.IsNotFound(err) {
-		controllerutil.SetControllerReference(js, desired, r.Scheme)
+		if err := controllerutil.SetControllerReference(js, desired, r.Scheme); err != nil {
+			return err
+		}
 		return r.Create(ctx, desired)
 	}
 
@@ -191,8 +190,7 @@ func (r *JsonServerReconciler) reconcileConfigMap(ctx context.Context, js *examp
 // 	return nil
 // }
 
-
-func (r *JsonServerReconciler) reconcileDeployment(ctx context.Context,js *examplev1.JsonServer,) (*appsv1.Deployment, error) {
+func (r *JsonServerReconciler) reconcileDeployment(ctx context.Context, js *examplev1.JsonServer) (*appsv1.Deployment, error) {
 
 	deploy := &appsv1.Deployment{}
 	err := r.Get(ctx, types.NamespacedName{
@@ -208,7 +206,9 @@ func (r *JsonServerReconciler) reconcileDeployment(ctx context.Context,js *examp
 	desired := desiredDeployment(js, replicas)
 
 	if apierrors.IsNotFound(err) {
-		controllerutil.SetControllerReference(js, desired, r.Scheme)
+		if err := controllerutil.SetControllerReference(js, desired, r.Scheme); err != nil {
+			return err
+		}
 		if err := r.Create(ctx, desired); err != nil {
 			return nil, err
 		}
@@ -228,7 +228,6 @@ func (r *JsonServerReconciler) reconcileDeployment(ctx context.Context,js *examp
 
 	return deploy, nil
 }
-
 
 func desiredDeployment(js *examplev1.JsonServer, replicas int32) *appsv1.Deployment {
 	return &appsv1.Deployment{
@@ -315,7 +314,9 @@ func (r *JsonServerReconciler) reconcileService(ctx context.Context, js *example
 			},
 		}
 
-		controllerutil.SetControllerReference(js, desired, r.Scheme)
+		if err := controllerutil.SetControllerReference(js, desired, r.Scheme); err != nil {
+			return err
+		}
 		return r.Create(ctx, desired)
 	}
 

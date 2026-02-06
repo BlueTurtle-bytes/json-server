@@ -59,10 +59,10 @@ type JsonServerCustomValidator struct {
 func (v *JsonServerCustomValidator) ValidateCreate(_ context.Context, obj *examplev1.JsonServer) (admission.Warnings, error) {
 
 	if !strings.HasPrefix(obj.Name, "app-") {
-		return nil, fmt.Errorf("metadata.name must start with app-")
+		return nil, fmt.Errorf("Error: metadata.name must start with app-")
 	}
 
-	var js interface{}
+	var js any
 	if err := json.Unmarshal([]byte(obj.Spec.JsonConfig), &js); err != nil {
 		return nil, fmt.Errorf("Error: spec.jsonConfig is not a valid json object")
 	}
@@ -71,19 +71,19 @@ func (v *JsonServerCustomValidator) ValidateCreate(_ context.Context, obj *examp
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type JsonServer.
-func (v *JsonServerCustomValidator) ValidateUpdate(_ context.Context,oldObj, newObj *examplev1.JsonServer,) (admission.Warnings, error) {
+func (v *JsonServerCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *examplev1.JsonServer) (admission.Warnings, error) {
 
-    // dont allow allow name changes
-    if oldObj.Name != newObj.Name {
-        return nil, fmt.Errorf("metadata.name is immutable")
-    }
+	// dont allow allow name changes
+	if oldObj.Name != newObj.Name {
+		return nil, fmt.Errorf("metadata.name is immutable")
+	}
 
-    // Allow invalid JSON updates
-    // Controller will detect and update status
+	// Allow invalid JSON updates
+	// Controller will detect and update status
 
-    return nil, nil
+	return nil, nil
 }
- 
+
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type JsonServer.
 func (v *JsonServerCustomValidator) ValidateDelete(_ context.Context, obj *examplev1.JsonServer) (admission.Warnings, error) {
 	jsonserverlog.Info("Validation for JsonServer upon deletion", "name", obj.GetName())

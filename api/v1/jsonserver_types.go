@@ -43,7 +43,7 @@ type JsonServerStatus struct {
 	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
 	State   string `json:"state,omitempty"`
 	Message string `json:"message,omitempty"`
-	
+
 	// Replicas is the current number of replicas
 	// +optional
 	Replicas int32 `json:"replicas,omitempty"`
