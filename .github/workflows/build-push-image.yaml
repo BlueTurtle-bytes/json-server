@@ -44,3 +44,20 @@ jobs:
         run: |
           echo "Image pushed to:"
           echo "ttl.sh/${IMAGE_NAME}-${{ steps.vars.outputs.tag }}:${TTL}"
+
+
+      - name: Update kustomization image
+        run: |
+          sed -i.bak \
+            -e 's|newName: .*|newName: ttl.sh/${IMAGE_NAME}-${{ steps.vars.outputs.tag }|' \
+            -e 's|newTag: .*|newTag: ${TTL}|' \
+            config/manager/kustomization.yaml
+          rm config/manager/kustomization.yaml.bak
+
+      - name: Commit GitOps update
+        run: |
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git add config/manager/kustomization.yaml
+          git commit -m "chore(gitops): deploy controller image"
+          git push
