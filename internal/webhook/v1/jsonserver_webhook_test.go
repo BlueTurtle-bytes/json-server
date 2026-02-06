@@ -1,70 +1,97 @@
-/*
-Copyright 2026.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package v1
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	examplev1 "github.com/BlueTurtle-bytes/json-server/api/v1"
-	// TODO (user): Add any additional imports if needed
 )
 
 var _ = Describe("JsonServer Webhook", func() {
 	var (
-		obj       *examplev1.JsonServer
-		oldObj    *examplev1.JsonServer
+		ctx       context.Context
 		validator JsonServerCustomValidator
 	)
 
 	BeforeEach(func() {
-		obj = &examplev1.JsonServer{}
-		oldObj = &examplev1.JsonServer{}
+		ctx = context.Background()
 		validator = JsonServerCustomValidator{}
-		Expect(validator).NotTo(BeNil(), "Expected validator to be initialized")
-		Expect(oldObj).NotTo(BeNil(), "Expected oldObj to be initialized")
-		Expect(obj).NotTo(BeNil(), "Expected obj to be initialized")
 	})
 
-	AfterEach(func() {
-		// TODO (user): Add any teardown logic common to all tests
+	Context("ValidateCreate", func() {
+		It("should deny creation when name does not start with app-", func() {
+			obj := &examplev1.JsonServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "invalid-name",
+				},
+				Spec: examplev1.JsonServerSpec{
+					JsonConfig: `{}`,
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should deny creation when jsonConfig is invalid JSON", func() {
+			obj := &examplev1.JsonServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "app-valid",
+				},
+				Spec: examplev1.JsonServerSpec{
+					JsonConfig: `{ invalid json }`,
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should allow creation for valid JsonServer", func() {
+			obj := &examplev1.JsonServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "app-valid",
+				},
+				Spec: examplev1.JsonServerSpec{
+					JsonConfig: `{
+						"people": [
+							{ "id": 1, "name": "Alice" }
+						]
+					}`,
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
-	Context("When creating or updating JsonServer under Validating Webhook", func() {
-		// TODO (user): Add logic for validating webhooks
-		// Example:
-		// It("Should deny creation if a required field is missing", func() {
-		//     By("simulating an invalid creation scenario")
-		//     obj.SomeRequiredField = ""
-		//     Expect(validator.ValidateCreate(ctx, obj)).Error().To(HaveOccurred())
-		// })
-		//
-		// It("Should admit creation if all required fields are present", func() {
-		//     By("simulating an invalid creation scenario")
-		//     obj.SomeRequiredField = "valid_value"
-		//     Expect(validator.ValidateCreate(ctx, obj)).To(BeNil())
-		// })
-		//
-		// It("Should validate updates correctly", func() {
-		//     By("simulating a valid update scenario")
-		//     oldObj.SomeRequiredField = "updated_value"
-		//     obj.SomeRequiredField = "updated_value"
-		//     Expect(validator.ValidateUpdate(ctx, oldObj, obj)).To(BeNil())
-		// })
-	})
+	Context("ValidateUpdate", func() {
+		It("should allow update even if jsonConfig becomes invalid", func() {
+			oldObj := &examplev1.JsonServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "app-test",
+				},
+				Spec: examplev1.JsonServerSpec{
+					JsonConfig: `{}`,
+				},
+			}
 
+			newObj := &examplev1.JsonServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "app-test",
+				},
+				Spec: examplev1.JsonServerSpec{
+					JsonConfig: `{ invalid json }`,
+				},
+			}
+
+			_, err := validator.ValidateUpdate(ctx, oldObj, newObj)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
 })
