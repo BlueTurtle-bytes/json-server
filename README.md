@@ -1,138 +1,327 @@
-# json-server
-// TODO(user): Add simple overview of use/purpose
+# JsonServer Kubernetes Operator (GitOps-enabled)
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+This repository contains a **full Kubernetes Operator implementation** for managing `json-server` instances using **Kubebuilder**, **CustomResourceDefinitions (CRDs)**, **Validating Admission Webhooks**, and **Controllers**, deployed via **GitOps with Flux** and **CI-driven image updates**.
 
-## Getting Started
+This README is a **complete, step-by-step guide**, starting from an empty machine to a fully working system, including **Flux bootstrap with Git authentication**, **component installation**, and **GitOps reconciliation**.
 
-### Prerequisites
-- go version v1.24.6+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+---
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+## 1. What This Project Does
 
-```sh
-make docker-build docker-push IMG=<some-registry>/json-server:tag
+The operator introduces a new Kubernetes resource:
+
+```yaml
+apiVersion: example.com/v1
+kind: JsonServer
 ```
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
+When a `JsonServer` resource is created, the controller automatically:
 
-**Install the CRDs into the cluster:**
+- Creates a `ConfigMap` containing `db.json`
+- Creates a `Deployment running backplane/json-server`
+- Creates a `Service` exposing port `3000`
+- Reconciles changes on update
+- Deletes all child resources on delete
+- Updates `.status` with `Synced` or `Error`
 
-```sh
-make install
+A **validating webhook** enforces:
+- `metadata.name` must start with `app-`
+- `spec.jsonConfig` must be valid JSON
+
+---
+
+## 2. Supported Platforms
+
+| Platform | Supported | Notes |
+|--------|-----------|------|
+| macOS (Intel / Apple Silicon) | ✅ | Recommended |
+| Linux | ✅ | Not Tested |
+| Windows (WSL2) | ✅ | Not Tested |
+
+All commands are identical across platforms (run inside WSL on Windows).
+
+---
+
+## 3. Prerequisites
+
+Install the following tools:
+
+- Docker
+- kubectl
+- kind
+- Go >= 1.22
+- kubebuilder
+- Flux CLI
+
+### macOS
+```bash
+brew install docker kubectl kind go fluxcd/tap/flux
 ```
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
-
-```sh
-make deploy IMG=<some-registry>/json-server:tag
+### Linux (Ubuntu)
+```bash
+sudo apt update
+sudo apt install -y docker.io kubectl golang
+curl -s https://fluxcd.io/install.sh | sudo bash
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
+### Windows (WSL2)
+```powershell
+wsl --install
+```
+Install Linux tools inside WSL.
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+---
 
-```sh
-kubectl apply -k config/samples/
+## 4. Create a Local Kubernetes Cluster
+
+```bash
+kind create cluster --name json-server
+kubectl cluster-info
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+---
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+## 5. Install cert-manager (Required for Webhooks)
 
-```sh
-kubectl delete -k config/samples/
+```bash
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+kubectl wait --for=condition=Available deployment/cert-manager -n cert-manager --timeout=120s
 ```
 
-**Delete the APIs(CRDs) from the cluster:**
+---
 
-```sh
-make uninstall
+## 6. Build and Deploy the Operator
+
+### Generate CRDs and RBAC
+```bash
+make manifests
 ```
 
-**UnDeploy the controller from the cluster:**
+### Run Controller Locally (Dev Mode)
+```bash
+make run
+```
 
-```sh
+### OR Deploy Controller to the Cluster
+```bash
+make docker-build docker-push IMG=controller:latest
+kind load docker-image controller:latest
+make deploy IMG=controller:latest
+```
+
+Verify:
+```bash
+kubectl get pods -n json-server-system
+```
+
+---
+
+## 7. Bootstrap Flux with Git Authentication
+
+Flux must be bootstrapped with **Git user identity and authentication** so it can:
+- Install Flux components
+- Push changes back to Git (if needed)
+- Reconcile GitOps manifests
+
+### 7.1 Create a GitHub Personal Access Token (PAT)
+
+Create a token with:
+- Repository access (read/write)
+- Contents: Read & Write
+
+Export credentials locally:
+
+```bash
+export GITHUB_USER=<your-github-username>
+export GITHUB_TOKEN=<your-github-token>
+```
+
+---
+
+### 7.2 Bootstrap Flux (with extra components)
+
+```bash
+flux bootstrap github   
+  --owner=$GITHUB_USER  
+  --repository=json-server-flux  
+  --branch=main   
+  --path=clusters/json-server   
+  --personal   
+  --components-extra=image-reflector-controller,image-automation-controller   
+  --token-auth
+```
+
+This command:
+- Creates the `flux-system` namespace
+- Installs Flux controllers
+- Installs extra image components
+- Commits bootstrap manifests to Git
+- Configures Git authentication
+
+Verify:
+```bash
+flux get all
+```
+
+---
+
+## 8. Apply GitOps Manifests (Application Repo)
+
+The `config/gitops/` directory contains:
+
+- `GitRepository` – points Flux to this repository
+- `Kustomization` – applies `config/default`
+
+Apply them:
+
+```bash
+kubectl apply -f config/gitops/
+```
+
+Verify:
+```bash
+flux get sources git
+flux get kustomizations
+```
+
+---
+
+## 9. CI and Image Management (ttl.sh)
+
+- GitHub Actions builds the controller image
+- Pushes it to `ttl.sh`
+- Updates `config/manager/kustomization.yaml`
+- Commits the change back to Git
+- Flux reconciles automatically
+
+> `ttl.sh` requires the TTL to be encoded in the image tag (e.g. `:2h`), so CI-driven GitOps updates are used instead of Flux image automation.
+
+---
+## 10. Testing
+
+Test samples files are be found /config/sample
+
+### 10.1 Deploy a VALID JsonServer
+
+```yaml
+apiVersion: example.com/v1
+kind: JsonServer
+metadata:
+  name: app-basic
+spec:
+  replicas: 1
+  jsonConfig: |
+    {
+      "people": [
+        { "id": 1, "name": "Alice" }
+      ]
+    }
+```
+
+```bash
+kubectl apply -f valid.yaml
+```
+
+Verify created resources:
+```bash
+kubectl get deploy,svc,cm
+```
+
+---
+
+### 10.2 Test the Running json-server
+
+```bash
+kubectl port-forward svc/app-basic 3000:3000
+curl http://localhost:3000/people
+```
+
+Expected:
+```json
+[{ "id": 1, "name": "Alice" }]
+```
+
+---
+
+### 10.3 INVALID JsonServer Tests
+
+### Invalid Name
+```yaml
+metadata:
+  name: my-server
+```
+Result:
+```
+metadata.name must start with app-
+```
+
+### Invalid JSON
+```yaml
+jsonConfig: |
+  { invalid json
+```
+Result:
+```
+Error: spec.jsonConfig is not a valid json object
+```
+
+---
+
+## 10.4. Scaling with kubectl
+
+```bash
+kubectl scale jsonserver app-basic --replicas=3
+kubectl get deploy app-basic
+```
+
+---
+
+## 10.5 Status Reporting
+
+```bash
+kubectl get jsonserver app-basic -o yaml
+```
+
+Example:
+```yaml
+status:
+  state: Synced
+  message: Synced successfully!
+  replicas: 3
+```
+
+---
+
+## 11. Cleanup
+
+```bash
 make undeploy
+kind delete cluster --name json-server
 ```
 
-## Project Distribution
+---
 
-Following the options to release and provide this solution to the users.
+## 12. Design Notes
 
-### By providing a bundle with all YAML files
+- Validating webhook blocks invalid resources early
+- Controller updates status for runtime failures
+- CI-driven GitOps used due to ttl.sh limitations
+- Flux is bootstrapped with authenticated Git access
+- Git remains the single source of truth
 
-1. Build the installer for the image built and published in the registry:
+---
 
-```sh
-make build-installer IMG=<some-registry>/json-server:tag
-```
+## 13. Summary
 
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
+This project demonstrates:
 
-2. Using the installer
-
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/json-server/<tag or branch>/dist/install.yaml
-```
-
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-kubebuilder edit --plugins=helm/v2-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
-
-## License
-
-Copyright 2026.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
-
+- Kubernetes API extension with CRDs
+- Controller reconciliation patterns
+- Admission webhooks
+- Status subresources
+- GitOps with Flux
+- CI-driven deployment
+- Cross-platform local development
+- Real-world GitOps trade-offs
 
