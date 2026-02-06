@@ -23,36 +23,36 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Compute image tag
+      - name: Compute image variables
         id: vars
         run: |
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          IMAGE="ttl.sh/${IMAGE_NAME}-${SHORT_SHA}:${TTL}"
           echo "tag=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "image=${IMAGE}" >> $GITHUB_OUTPUT
+
 
       - name: Build and push to ttl.sh
         run: |
-          IMAGE=ttl.sh/${IMAGE_NAME}-${{ steps.vars.outputs.tag }}:${TTL}
-          echo "Building and pushing $IMAGE"
+          echo "Building and pushing ${{ steps.vars.outputs.image }}"
+          docker build -t "${{ steps.vars.outputs.image }}" .
+          docker push "${{ steps.vars.outputs.image }}"
 
-          docker build \
-            -t $IMAGE \
-            .
-
-          docker push $IMAGE
 
       - name: Output image reference
         run: |
           echo "Image pushed to:"
-          echo "ttl.sh/${IMAGE_NAME}-${{ steps.vars.outputs.tag }}:${TTL}"
-
+          echo "${{ steps.vars.outputs.image }}"
 
       - name: Update kustomization image
         run: |
+          NEW_NAME="ttl.sh/${IMAGE_NAME}-${{ steps.vars.outputs.tag }}"
           sed -i.bak \
-            -e 's|newName: .*|newName: ttl.sh/${IMAGE_NAME}-${{ steps.vars.outputs.tag }|' \
-            -e 's|newTag: .*|newTag: ${TTL}|' \
+            -e "s|newName: .*|newName: ${NEW_NAME}|" \
+            -e "s|newTag: .*|newTag: ${TTL}|" \
             config/manager/kustomization.yaml
           rm config/manager/kustomization.yaml.bak
+
 
       - name: Commit GitOps update
         run: |
@@ -61,3 +61,6 @@ jobs:
           git add config/manager/kustomization.yaml
           git commit -m "chore(gitops): deploy controller image"
           git push
+
+
+
