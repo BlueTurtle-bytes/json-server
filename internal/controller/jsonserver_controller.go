@@ -207,7 +207,7 @@ func (r *JsonServerReconciler) reconcileDeployment(ctx context.Context, js *exam
 
 	if apierrors.IsNotFound(err) {
 		if err := controllerutil.SetControllerReference(js, desired, r.Scheme); err != nil {
-			return err
+			return nil, err
 		}
 		if err := r.Create(ctx, desired); err != nil {
 			return nil, err
