@@ -34,7 +34,7 @@ A **validating webhook** enforces:
 
 | Platform | Supported | Notes |
 |--------|-----------|------|
-| macOS | ✅ | Tested & Recommended |
+| macOS 26.2 | ✅ | Tested & Recommended |
 | Linux | ✅ | Not Tested |
 | Windows (WSL2) | ✅ | Not Tested |
 
