@@ -38,7 +38,7 @@ import (
 	examplev1 "github.com/BlueTurtle-bytes/json-server/api/v1"
 )
 
-// JsonServerReconciler reconciles a JsonServer object
+// JsonServerReconciler reconciles a JsonServer object demo
 type JsonServerReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
