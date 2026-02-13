@@ -11,7 +11,7 @@ permissions:
 
 env:
   IMAGE_NAME: json-server-controller
-  TTL: 2h   # <-- longer for Flux stability can increase for test demo
+  TTL: 2h   # <-- longer for Flux stability and demo purposes
 
 jobs:
   build-and-push:
