@@ -4,5 +4,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
 - name: controller
-  newName: ttl.sh/json-server-controller-43babb4
+  newName: ttl.sh/json-server-controller-032856d
   newTag: 2h
