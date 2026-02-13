@@ -16,16 +16,6 @@ limitations under the License.
 
 package controller
 
-// import (
-// 	"context"
-
-// 	"k8s.io/apimachinery/pkg/runtime"
-// 	ctrl "sigs.k8s.io/controller-runtime"
-// 	"sigs.k8s.io/controller-runtime/pkg/client"
-// 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
-// 	examplev1 "github.com/BlueTurtle-bytes/json-server/api/v1"
-// )
 
 import (
 	"context"
