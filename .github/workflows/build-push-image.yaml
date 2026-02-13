@@ -11,11 +11,12 @@ permissions:
 
 env:
   IMAGE_NAME: json-server-controller
-  TTL: 2h
+  TTL: 2h   # <-- longer for Flux stability can increase for demo
 
 jobs:
   build-and-push:
     if: |
+      github.event_name != 'push' ||
       !contains(github.event.head_commit.message, 'chore(gitops)')
     runs-on: ubuntu-latest
 
@@ -33,21 +34,20 @@ jobs:
         run: |
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
           IMAGE="ttl.sh/${IMAGE_NAME}-${SHORT_SHA}:${TTL}"
+
           echo "tag=${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "image=${IMAGE}" >> $GITHUB_OUTPUT
 
-
+      # multi-platform build
       - name: Build and push to ttl.sh
         run: |
           echo "Building and pushing ${{ steps.vars.outputs.image }}"
-          docker build -t "${{ steps.vars.outputs.image }}" .
-          docker push "${{ steps.vars.outputs.image }}"
 
-
-      - name: Output image reference
-        run: |
-          echo "Image pushed to:"
-          echo "${{ steps.vars.outputs.image }}"
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t "${{ steps.vars.outputs.image }}" \
+            --push \
+            .
 
       - name: Update kustomization image
         run: |
@@ -58,14 +58,11 @@ jobs:
             config/manager/kustomization.yaml
           rm config/manager/kustomization.yaml.bak
 
-
       - name: Commit GitOps update
+        if: github.event_name == 'push'
         run: |
           git config user.name "ci-bot"
           git config user.email "ci-bot@users.noreply.github.com"
           git add config/manager/kustomization.yaml
-          git commit -m "chore(gitops): deploy controller image"
+          git commit -m "chore(gitops): deploy controller image" || echo "No changes"
           git push
-
-
-
