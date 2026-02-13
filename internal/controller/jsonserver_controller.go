@@ -146,7 +146,10 @@ func (r *JsonServerReconciler) reconcileConfigMap(ctx context.Context, js *examp
 // -------------------- Deployment --------------------
 
 
-func (r *JsonServerReconciler) reconcileDeployment(ctx context.Context, js *examplev1.JsonServer) (*appsv1.Deployment, error) {
+func (r *JsonServerReconciler) reconcileDeployment(
+	ctx context.Context,
+	js *examplev1.JsonServer,
+) (*appsv1.Deployment, error) {
 
 	deploy := &appsv1.Deployment{}
 	err := r.Get(ctx, types.NamespacedName{
@@ -175,8 +178,29 @@ func (r *JsonServerReconciler) reconcileDeployment(ctx context.Context, js *exam
 		return nil, err
 	}
 
-	if *deploy.Spec.Replicas != replicas {
+	updated := false
+
+	// --------------------
+	// Reconcile replicas
+	// --------------------
+	if deploy.Spec.Replicas == nil || *deploy.Spec.Replicas != replicas {
 		deploy.Spec.Replicas = &replicas
+		updated = true
+	}
+
+	// --------------------
+	// Reconcile pod template
+	// (this triggers rollout)
+	// --------------------
+	if !reflect.DeepEqual(deploy.Spec.Template, desired.Spec.Template) {
+		deploy.Spec.Template = desired.Spec.Template
+		updated = true
+	}
+
+	// --------------------
+	// Apply update if needed
+	// --------------------
+	if updated {
 		if err := r.Update(ctx, deploy); err != nil {
 			return nil, err
 		}
