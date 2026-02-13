@@ -86,11 +86,7 @@ func (r *JsonServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	// if err := r.reconcileDeployment(ctx, &js); err != nil {
-	// 	logger.Error(err, "failed to reconcile Deployment")
-	// 	r.updateStatus(ctx, &js, "Error", "Error: unexpected failure")
-	// 	return ctrl.Result{}, err
-	// }
+
 
 	deploy, err := r.reconcileDeployment(ctx, &js)
 	if err != nil {
@@ -99,7 +95,7 @@ func (r *JsonServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	// ✅ Accurate replica reporting
+	// Accurate replica reporting
 	js.Status.Replicas = deploy.Status.ReadyReplicas
 
 	if err := r.reconcileService(ctx, &js); err != nil {
@@ -159,36 +155,6 @@ func (r *JsonServerReconciler) reconcileConfigMap(ctx context.Context, js *examp
 
 // -------------------- Deployment --------------------
 
-// func (r *JsonServerReconciler) reconcileDeployment(ctx context.Context, js *examplev1.JsonServer) error {
-// 	deploy := &appsv1.Deployment{}
-// 	err := r.Get(ctx, types.NamespacedName{
-// 		Name:      js.Name,
-// 		Namespace: js.Namespace,
-// 	}, deploy)
-
-// 	replicas := int32(1)
-// 	if js.Spec.Replicas != nil {
-// 		replicas = *js.Spec.Replicas
-// 	}
-
-// 	desired := desiredDeployment(js, replicas)
-
-// 	if apierrors.IsNotFound(err) {
-// 		controllerutil.SetControllerReference(js, desired, r.Scheme)
-// 		return r.Create(ctx, desired)
-// 	}
-
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	if *deploy.Spec.Replicas != replicas {
-// 		deploy.Spec.Replicas = &replicas
-// 		return r.Update(ctx, deploy)
-// 	}
-
-// 	return nil
-// }
 
 func (r *JsonServerReconciler) reconcileDeployment(ctx context.Context, js *examplev1.JsonServer) (*appsv1.Deployment, error) {
 
